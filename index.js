@@ -1,4 +1,3 @@
-require('dotenv').config();
 var express = require('express');
 var bodyParser = require('body-parser');
 var methodOverride = require('method-override');
@@ -11,10 +10,6 @@ var app = express();
 
 app.use(cors());
 app.use(express.json());
-
-const PORT = process.env.PORT || 1000;
-
-const uri = process.env.MONGO_URI;
 
 var connection = "mongodb+srv://yuvika:yuvika123@cluster0.l0eiy9e.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
@@ -33,16 +28,15 @@ MongoClient.connect(connection).then((succ) => {
     db = succ.db("mydatabase");
 })
 
-
 app.post("/registerform", (req, res) => {
-    const { Username, Email, Password, Contact } = req.body;
+    const { Username, Email, Password, Contact, Status } = req.body;
     // console.log(req.body);
 
     db.collection("users").findOne({ Email: Email }).then(existingUser => {
         if (existingUser) {
             return res.send({ alreadyRegistered: true });
         }
-        db.collection("users").insertOne({ Username, Email, Password, Contact }).then((succ) => {
+        db.collection("users").insertOne({ Username, Email, Password, Contact, Status }).then((succ) => {
             const mailOptions = {
                 from: 'yuvikagupta1121@gmail.com',
                 to: Email,
@@ -69,6 +63,24 @@ app.post("/registerform", (req, res) => {
         })
     })
 });
+
+app.post("/updateuserstatus", (req, res) => {
+    const { id, Status } = req.body;
+
+    console.log(Status);
+
+
+    db.collection("users").updateOne(
+        { _id: new mongodb.ObjectId(id) },
+        { $set: { Status: Status } }
+    ).then(() => {
+        res.send({ success: true, message: "Status updated" });
+    }).catch((err) => {
+        console.error(err);
+        res.status(500).send({ success: false, message: "Update failed" });
+    });
+});
+
 
 app.post("/loginform", (req, res) => {
     const { Email, Password } = req.body;
@@ -116,7 +128,13 @@ app.post("/adminlogincheck", (req, res) => {
 
 app.post("/addproduct", (req, res) => {
     db.collection("products").insertOne(req.body).then((succ) => {
-        res.send("ok")
+        db.collection("categories").updateOne({
+            Catname: req.body.Subcategory
+        }, {
+            $inc: { Products: +1 }
+        }).then((resss) => {
+            res.send("ok")
+        })
     })
 })
 
@@ -124,7 +142,6 @@ app.post("/fetchproducts", (req, res) => {
     db.collection("products").find().toArray().then((succ) => {
         res.send(succ);
         console.log(succ);
-
     })
 })
 
@@ -141,6 +158,66 @@ app.post("/fetchusers", (req, res) => {
         res.send(succ)
     })
 })
+
+app.post("/fetchoneuser", (req, res) => {
+    db.collection("users").findOne({
+        _id: new mongodb.ObjectId(req.body.Id),
+    }).then((user) => {
+        res.send(user);
+    })
+    // .catch((err) => {
+    //     res.status(500).send("Error fetching user");
+    // });
+});
+
+app.post('/fetchUserOne', (req, res) => {
+    var id = new mongodb.ObjectId(req.body.ID);
+    db.collection('users').findOne({
+        _id: id
+    }).then((succ) => {
+        res.send(succ)
+    })
+})
+
+app.post('/updateprofiledata', (req, res) => {
+    db.collection("users").updateOne(
+        { _id: new mongodb.ObjectId(req.body.Id) },
+        {
+            $set: {
+                Username: req.body.Username,
+                Fname: req.body.Fname,
+                Lname: req.body.Lname,
+                Gender: req.body.Gender,
+                Contact: req.body.Contact,
+                Email: req.body.Email
+            }
+        }
+    ).then((Succ) => {
+        res.send("data inserted");
+    })
+})
+
+app.post("/updatecategory", (req, res) => {
+    const { _id, Catname, Status } = req.body;
+
+    db.collection("categories").updateOne(
+        { _id: new mongodb.ObjectId(_id) },
+        { $set: { Catname, Status } }
+    ).then(() => {
+        res.send("Category updated");
+    });
+});
+
+app.post("/updateproduct", (req, res) => {
+    const { _id, Productname, Category, Subcategory, Type, Size, Price, Stock, Images, Description, Status } = req.body;
+
+    db.collection("products").updateOne(
+        { _id: new mongodb.ObjectId(_id) },
+        { $set: { Productname, Category, Subcategory, Type, Size, Price, Stock, Images, Description, Status } }
+    ).then(() => {
+        res.send("Category updated");
+    });
+});
 
 app.post("/submitcategories", (req, res) => {
     db.collection("categories").insertOne(req.body).then((succ) => {
@@ -175,26 +252,24 @@ app.post("/addtocart", (req, res) => {
         Productname: Productname,
         selectedSize: selectedSize
     })
-    .then((existingItem) => {
-        if (existingItem) {
-            // If item exists, increase CartValue
-            return db.collection("cart").updateOne(
-                { _id: existingItem._id },
-                { $inc: { CartValue: req.body.CartValue || 1 } }
-            ).then(() => {
-                res.send("updated");
-            });
-        } else {
-            // If not in cart, insert new item
-            return db.collection("cart").insertOne(req.body)
-                .then(() => {
-                    res.send("ok");
+        .then((existingItem) => {
+            if (existingItem) {
+                // If item exists, increase CartValue
+                return db.collection("cart").updateOne(
+                    { _id: existingItem._id },
+                    { $inc: { CartValue: req.body.CartValue || 1 } }
+                ).then(() => {
+                    res.send("updated");
                 });
-        }
-    })
+            } else {
+                // If not in cart, insert new item
+                return db.collection("cart").insertOne(req.body)
+                    .then(() => {
+                        res.send("ok");
+                    });
+            }
+        })
 });
-
-
 app.post("/fetchcart", (req, res) => {
     console.log(req.body.id);
 
@@ -206,16 +281,21 @@ app.post("/fetchcart", (req, res) => {
 })
 
 app.post("/increasecart", (req, res) => {
-
     const { _id } = req.body;
+
     db.collection("cart").updateOne(
-        { _id: new mongodb.ObjectId(_id) },
-        { $inc: { CartValue: 1 } }
+        { _id: new mongodb.ObjectId(_id) },   // Match by ObjectId
+        { $inc: { CartValue: 1 } }            // Increment CartValue by 1
     )
-        .then((succ) => {
+        .then(() => {
             res.send("Quantity increased");
         })
-})
+        .catch((err) => {
+            console.error(err);
+            res.status(500).send("Error increasing quantity");
+        });
+});
+
 app.post("/decreasecart", (req, res) => {
     const { _id } = req.body;
     db.collection("cart").updateOne(
@@ -363,7 +443,6 @@ app.post("/trackorder", async (req, res) => {
             .find({ "address.Email": email })
             .sort({ orderDate: -1 })
             .toArray(); // Convert cursor to array
-
         if (orders.length > 0) {
             res.json(orders);
         } else {
@@ -375,9 +454,9 @@ app.post("/trackorder", async (req, res) => {
     }
 });
 
-app.get("/", (req, res) => {
-  res.send("MongoDB without Mongoose!");
-});
+
+
+
 
 app.listen(1000, (req, res) => {
     console.log("Server Started");
