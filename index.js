@@ -162,11 +162,39 @@ app.post("/deletecategories", (req, res) => {
     })
 })
 
+// app.post("/addtocart", (req, res) => {
+//     db.collection("cart").insertOne(req.body).then((succ) => {
+//         res.send("ok");
+//     })
+// })
+
 app.post("/addtocart", (req, res) => {
-    db.collection("cart").insertOne(req.body).then((succ) => {
-        res.send("ok");
+    const { userId, Productname, selectedSize } = req.body;
+    db.collection("cart").findOne({
+        userId: userId,
+        Productname: Productname,
+        selectedSize: selectedSize
     })
-})
+    .then((existingItem) => {
+        if (existingItem) {
+            // If item exists, increase CartValue
+            return db.collection("cart").updateOne(
+                { _id: existingItem._id },
+                { $inc: { CartValue: req.body.CartValue || 1 } }
+            ).then(() => {
+                res.send("updated");
+            });
+        } else {
+            // If not in cart, insert new item
+            return db.collection("cart").insertOne(req.body)
+                .then(() => {
+                    res.send("ok");
+                });
+        }
+    })
+});
+
+
 app.post("/fetchcart", (req, res) => {
     console.log(req.body.id);
 
